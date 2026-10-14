@@ -1,5 +1,3 @@
-// Vercel serverless function — proxy streaming vers l'API Gemini.
-// La clé vit UNIQUEMENT dans les variables d'environnement Vercel.
 const SYS = `Tu es un ingénieur logiciel senior. Tu reçois du code (n'importe quel langage) et une demande.
 Règles strictes:
 - Renvoie UNIQUEMENT le fichier complet modifié, sans explication, sans balises markdown.
