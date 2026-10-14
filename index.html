@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#E8ECF1">
+<title>Codexai</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#E8ECF1;--panel:#F7F9FB;--ink:#17202B;--mute:#5E6B7A;--line:#CBD3DD;--acc:#3A47C9;--acc-ink:#fff;--add:#D6F0E3;--add-ink:#14543A;--del:#F8DADA;--del-ink:#7A1E1E}
+@media (prefers-color-scheme:dark){:root{--bg:#141A23;--panel:#1C2430;--ink:#E6EBF2;--mute:#8C9AAB;--line:#2E3948;--acc:#8B95F5;--acc-ink:#10142E;--add:#173A2B;--add-ink:#9BE3C0;--del:#40191B;--del-ink:#F3B2B2}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 "Bricolage Grotesque",system-ui,sans-serif;padding-top:env(safe-area-inset-top,0);padding-bottom:env(safe-area-inset-bottom,0);display:flex;flex-direction:column}
+header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 6px}
+h1{font-size:20px;margin:0;letter-spacing:-.01em}
+#timer{font:500 13px "IBM Plex Mono",monospace;color:var(--mute)}
+#timer.warn{color:#C2410C}
+nav{display:flex;gap:4px;padding:6px 10px;overflow-x:auto}
+nav button{flex:1;min-width:76px;padding:9px 6px;border:1px solid var(--line);background:transparent;color:var(--mute);border-radius:10px;font:inherit;font-weight:500}
+nav button[aria-selected=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+main{flex:1;min-height:0;padding:6px 10px 10px;display:flex;flex-direction:column}
+.pane{display:none;flex:1;min-height:0;flex-direction:column;gap:8px}
+.pane.on{display:flex}
+textarea,pre#out,#diff{flex:1;min-height:0;width:100%;margin:0;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);font:13px/1.5 "IBM Plex Mono",monospace;resize:none;overflow:auto;white-space:pre;tab-size:2}
+#req{flex:0 0 38%;white-space:pre-wrap;font:15px/1.45 "Bricolage Grotesque",sans-serif}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-weight:500}
+.btn.main{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);flex:1;font-weight:700}
+.btn:disabled{opacity:.5}
+select{padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit}
+label.chk{display:flex;gap:6px;align-items:center;color:var(--mute);font-size:14px}
+#status{color:var(--mute);font-size:13px;min-height:18px}
+#status.err{color:#C2410C;white-space:pre-wrap}
+.l{display:block;padding:0 4px}
+.l.a{background:var(--add);color:var(--add-ink)}
+.l.d{background:var(--del);color:var(--del-ink)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+</style>
+</head>
+<body>
+<header><h1>Codexai</h1><span id="timer">0:00</span></header>
+<nav role="tablist">
+  <button role="tab" data-t="src" aria-selected="true">Code</button>
+  <button role="tab" data-t="ask" aria-selected="false">Demande</button>
+  <button role="tab" data-t="res" aria-selected="false">Résultat</button>
+  <button role="tab" data-t="dif" aria-selected="false">Changements</button>
+</nav>
+<main>
+  <section class="pane on" id="p-src">
+    <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Colle ton code ici, ou charge un fichier. Vide = création depuis zéro."></textarea>
+    <div class="row">
+      <input type="file" id="file" hidden>
+      <button class="btn" id="load">Charger un fichier</button>
+      <select id="lang"><option value="auto">Langage : auto</option><option>JavaScript</option><option>TypeScript</option><option>Python</option><option>PHP</option><option>HTML/CSS</option><option>Java</option><option>C/C++</option><option>Go</option><option>Rust</option><option>SQL</option></select>
+    </div>
+  </section>
+  <section class="pane" id="p-ask">
+    <textarea id="req" placeholder="Que dois-je compléter ou ajouter ? Exemple : complète les fonctions vides et ajoute un système de connexion."></textarea>
+    <label class="chk"><input type="checkbox" id="rev" checked> Vérifier et corriger automatiquement avant de rendre</label>
+    <div class="row"><button class="btn main" id="go">Générer</button><button class="btn" id="stop" disabled>Arrêter</button></div>
+    <div id="status" role="status"></div>
+  </section>
+  <section class="pane" id="p-res">
+    <pre id="out"></pre>
+    <div class="row">
+      <button class="btn" id="copy">Copier</button>
+      <button class="btn" id="dl">Télécharger</button>
+      <button class="btn" id="apply">Remplacer mon code</button>
+    </div>
+  </section>
+  <section class="pane" id="p-dif"><div id="diff"></div></section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let ctrl=null,t0=0,tick=null,before='';
+function show(t){document.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.id==='p-'+t))}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.t));
+$('load').onclick=()=>$('file').click();
+$('file').onchange=async e=>{const f=e.target.files[0];if(!f)return;$('code').value=await f.text();$('file').value=''};
+function clean(s){return s.replace(/^\s*```[\w+-]*\n/,'').replace(/\n```\s*$/,'')}
+function setStatus(m,err){const s=$('status');s.textContent=m;s.className=err?'err':''}
+function startTimer(){t0=Date.now();$('timer').className='';tick=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);$('timer').textContent=Math.floor(s/60)+':'+String(s%60).padStart(2,'0');if(s>=210)$('timer').className='warn'},500)}
+function stopTimer(){clearInterval(tick)}
+async function call(mode,code,request,onChunk){
+  const r=await fetch('/api/complete',{method:'POST',headers:{'Content-Type':'application/json'},signal:ctrl.signal,body:JSON.stringify({mode,code,request,language:$('lang').value})});
+  if(!r.ok){let m='Erreur '+r.status;try{m+=' : '+(await r.json()).error}catch(_){}throw new Error(m)}
+  const rd=r.body.getReader(),d=new TextDecoder();let acc='';
+  for(;;){const {done,value}=await rd.read();if(done)break;acc+=d.decode(value,{stream:true});onChunk(clean(acc))}
+  return clean(acc);
+}
+$('go').onclick=async()=>{
+  const req=$('req').value.trim();if(!req){setStatus('Écris d’abord ta demande.',true);return}
+  before=$('code').value;ctrl=new AbortController();
+  $('go').disabled=true;$('stop').disabled=false;$('out').textContent='';startTimer();
+  try{
+    setStatus('Génération en cours…');show('res');
+    let out=await call('generate',before,req,t=>{$('out').textContent=t});
+    if($('rev').checked&&out.trim()){
+      setStatus('Vérification et correction…');
+      const fixed=await call('review',out,req,t=>{$('out').textContent=t});
+      if(fixed.trim())out=fixed;
+    }
+    $('out').textContent=out;renderDiff(before,out);
+    setStatus('Terminé en '+$('timer').textContent+'. Teste le code dans ton environnement avant de le déployer.');
+  }catch(e){setStatus(e.name==='AbortError'?'Arrêté.':e.message,e.name!=='AbortError')}
+  finally{stopTimer();$('go').disabled=false;$('stop').disabled=true}
+};
+$('stop').onclick=()=>ctrl&&ctrl.abort();
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('out').textContent);setStatus('Copié.')}catch(_){setStatus('Copie impossible : sélectionne le texte à la main.',true)}};
+$('dl').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([$('out').textContent],{type:'text/plain'}));a.download='code-complete.txt';a.click()};
+$('apply').onclick=()=>{if(!$('out').textContent)return;$('code').value=$('out').textContent;setStatus('Le résultat est maintenant ton code source.');show('src')};
+function renderDiff(a,b){
+  const A=a.split('\n'),B=b.split('\n'),box=$('diff');box.textContent='';
+  const add=(c,t)=>{const s=document.createElement('span');s.className='l '+c;s.textContent=(c==='a'?'+ ':c==='d'?'- ':'  ')+t;box.appendChild(s)};
+  if(A.length*B.length>4e6){const sa=new Set(A),sb=new Set(B);A.forEach(l=>{if(!sb.has(l))add('d',l)});B.forEach(l=>{if(!sa.has(l))add('a',l)});return}
+  const n=A.length,m=B.length,W=m+1,L=new Uint32Array((n+1)*W);
+  for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)L[i*W+j]=A[i]===B[j]?L[(i+1)*W+j+1]+1:Math.max(L[(i+1)*W+j],L[i*W+j+1]);
+  let i=0,j=0;
+  while(i<n&&j<m){if(A[i]===B[j]){add('',A[i]);i++;j++}else if(L[(i+1)*W+j]>=L[i*W+j+1]){add('d',A[i]);i++}else{add('a',B[j]);j++}}
+  while(i<n)add('d',A[i++]);while(j<m)add('a',B[j++]);
+}
+</script>
+</body>
+</html>
