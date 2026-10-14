@@ -104,7 +104,7 @@ $('go').onclick=async()=>{
     }
     $('out').textContent=out;renderDiff(before,out);
     setStatus('Terminé en '+$('timer').textContent+'. Teste le code dans ton environnement avant de le déployer.');
-  }catch(e){setStatus(e.name==='AbortError'?'Arrêté.':e.message,e.name!=='AbortError')}
+  }catch(e){setStatus(e.name==='AbortError'?'Arrêté.':e.message,e.name!=='AbortError');show('ask')}
   finally{stopTimer();$('go').disabled=false;$('stop').disabled=true}
 };
 $('stop').onclick=()=>ctrl&&ctrl.abort();
