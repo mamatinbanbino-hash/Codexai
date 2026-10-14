@@ -25,19 +25,26 @@ module.exports = async (req, res) => {
     ? `Demande d'origine:\n${request}\n\nLangage: ${language}\n\nCode à vérifier:\n${code}`
     : `Langage: ${language}\n\nDemande:\n${request}\n\nCode actuel (peut être vide):\n${code}`;
 
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
+  const model = (process.env.GEMINI_MODEL || 'gemini-3.8-flash').trim();
 
   try {
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: mode === 'review' ? REVIEW : SYS }] },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 65536 }
-      })
+    const body = JSON.stringify({
+      systemInstruction: { parts: [{ text: mode === 'review' ? REVIEW : SYS }] },
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 65536 }
     });
+    const models = [model, (process.env.GEMINI_FALLBACK_MODEL || '').trim()].filter(Boolean);
+    let r;
+    for (let i = 0; i < 4; i++) {
+      const m = models[Math.min(i >= 2 ? 1 : 0, models.length - 1)];
+      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:streamGenerateContent?alt=sse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body
+      });
+      if (r.ok || ![429, 500, 503].includes(r.status)) break;
+      await new Promise(ok => setTimeout(ok, 2000 * (i + 1)));
+    }
     if (!r.ok) {
       const t = await r.text();
       return res.status(r.status).json({ error: t.slice(0, 600) });
